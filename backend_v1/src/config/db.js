@@ -32,4 +32,31 @@ function query(texto, parametros) {
   return pool.query(texto, parametros);
 }
 
-module.exports = { pool, query };
+// ------------------------------------------------------------
+// TRANSACCION: "todo o nada"
+// ------------------------------------------------------------
+// Recibe una funcion y le pasa un cliente dedicado.
+// - Si la funcion termina bien  -> COMMIT  (se guarda todo)
+// - Si lanza cualquier error    -> ROLLBACK (no se guardo nada)
+// - Pase lo que pase           -> release (devuelve la conexion al pool)
+//
+// La usamos cuando varias escrituras dependen entre si. Por ejemplo:
+// crear un producto Y abrir su stock en cada sucursal. Si falla una,
+// no queremos la otra a medias.
+// ------------------------------------------------------------
+async function transaccion(callback) {
+  const cliente = await pool.connect();
+  try {
+    await cliente.query('BEGIN');
+    const resultado = await callback(cliente);
+    await cliente.query('COMMIT');
+    return resultado;
+  } catch (error) {
+    await cliente.query('ROLLBACK');
+    throw error;
+  } finally {
+    cliente.release();
+  }
+}
+
+module.exports = { pool, query, transaccion };

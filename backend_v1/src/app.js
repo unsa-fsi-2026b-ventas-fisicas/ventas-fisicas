@@ -15,6 +15,8 @@ const { noEncontrada, manejadorErrores } = require('./middlewares/errores');
 const { verificarToken, soloRoles } = require('./middlewares/auth');
 const rutasAuth = require('./modules/auth/auth.routes');
 const rutasUsuarios = require('./modules/usuarios/usuarios.routes');
+const rutasProductos = require('./modules/productos/productos.routes');
+const rutasInventario = require('./modules/inventario/inventario.routes');
 
 const app = express();
 
@@ -53,6 +55,11 @@ app.use('/api/auth', rutasAuth);
 
 // Todo el CRUD de usuarios es exclusivo del administrador.
 app.use('/api/usuarios', verificarToken, soloRoles('administrador'), rutasUsuarios);
+
+// Productos e inventario: el token se exige para todo el modulo,
+// y adentro de cada archivo de rutas se decide que accion pide admin.
+app.use('/api/productos', verificarToken, rutasProductos);
+app.use('/api/inventario', verificarToken, rutasInventario);
 
 // 5) Si ninguna ruta coincidio, respondemos 404 en JSON.
 app.use(noEncontrada);

@@ -61,19 +61,32 @@ CREATE TABLE usuarios (
 
 -- ============================================================
 -- 3. PRODUCTOS
---  El precio de venta YA INCLUYE IGV (asi se maneja en tienda).
---  La baja es logica: activo = FALSE. Nunca se borra un producto
---  porque las ventas historicas lo necesitan.
+--  Campos pensados para cubrir varios escenarios de tienda:
+--   - codigo_barras : lo que lee el escaner (unico)
+--   - marca / categoria / presentacion : para buscar y mostrar
+--   - unidad_medida : como se vende (unidad, kg, litro, caja...)
+--   - afecto_igv    : FALSE si el producto esta exonerado del IGV
+--                     (ej. arroz, pan, leche: alimentos basicos)
+--   - activo        : baja logica, nunca se borra un producto
+--  El precio de venta incluye IGV cuando afecto_igv = TRUE.
+--  Si afecto_igv = FALSE, el precio es el total (no lleva IGV).
 -- ============================================================
 CREATE TABLE productos (
   id             SERIAL PRIMARY KEY,
   codigo_barras  VARCHAR(50)   NOT NULL UNIQUE,
   nombre         VARCHAR(150)  NOT NULL,
+  descripcion    VARCHAR(250),
+  marca          VARCHAR(80),
   categoria      VARCHAR(80),
+  presentacion   VARCHAR(50),   -- texto para el ticket: "1 kg", "500 ml", "x4"
+  unidad_medida  VARCHAR(10)   NOT NULL DEFAULT 'unidad'
+                 CHECK (unidad_medida IN ('unidad', 'kg', 'litro', 'caja', 'paquete')),
   precio_venta   NUMERIC(10,2) NOT NULL CHECK (precio_venta >= 0),
   costo          NUMERIC(10,2) NOT NULL DEFAULT 0 CHECK (costo >= 0),
+  afecto_igv     BOOLEAN       NOT NULL DEFAULT TRUE,
   activo         BOOLEAN       NOT NULL DEFAULT TRUE,
-  creado_en      TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+  creado_en      TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+  actualizado_en TIMESTAMPTZ   NOT NULL DEFAULT NOW()
 );
 
 -- ============================================================
@@ -187,6 +200,7 @@ CREATE TABLE venta_detalle (
   cantidad          INT           NOT NULL CHECK (cantidad > 0),
   precio_unitario   NUMERIC(10,2) NOT NULL CHECK (precio_unitario >= 0),
   total_linea       NUMERIC(10,2) NOT NULL CHECK (total_linea >= 0), -- cantidad * precio_unitario
+  afecto_igv        BOOLEAN       NOT NULL DEFAULT TRUE,             -- copiado del producto (snapshot)
   cantidad_devuelta INT           NOT NULL DEFAULT 0 CHECK (cantidad_devuelta >= 0),
   CHECK (cantidad_devuelta <= cantidad)
 );
@@ -232,6 +246,8 @@ CREATE TABLE devolucion_detalle (
 --  para reportes, asi que las creamos a mano.
 -- ============================================================
 CREATE INDEX idx_productos_nombre        ON productos (nombre);        -- busqueda por nombre
+CREATE INDEX idx_productos_marca         ON productos (marca);         -- busqueda por marca
+CREATE INDEX idx_productos_categoria     ON productos (categoria);     -- filtro del catalogo
 CREATE INDEX idx_productos_activo        ON productos (activo);        -- filtro de vigentes
 CREATE INDEX idx_inventario_sucursal     ON inventario (sucursal_id);  -- stock por tienda
 CREATE INDEX idx_ventas_fecha            ON ventas (creada_en);        -- ventas del dia

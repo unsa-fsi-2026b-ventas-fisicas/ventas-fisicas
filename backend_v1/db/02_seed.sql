@@ -33,36 +33,56 @@ INSERT INTO usuarios (id, nombre, usuario, password_hash, rol) VALUES
       '$2b$10$9vUvna10l0mQiVnlSXDl/.pm1ks/HwcBLdmODCQSe9YPqoXwnNwOa', 'cajero');
 
 -- ------------------------------------------------------------
--- PRODUCTOS
---  Los precios de venta YA INCLUYEN IGV (18%).
---  Los codigos de barras son ficticios pero con formato real (EAN-13).
+-- PRODUCTOS (solo 8, pero cada uno cubre un escenario distinto)
+--
+--   #   Escenario que demuestra
+--   1   Exonerado de IGV (alimento basico)
+--   2   Afecto a IGV
+--   3   Precio bajo (0.50) para vender varias unidades
+--   4   Stock bajo en la tienda principal
+--   5   Stock bajo en las dos tiendas
+--   6   Stock 0 en la sucursal 2 (no se puede vender ahi)
+--   7   Producto INACTIVO (baja logica: no aparece en el POS)
+--   8   Exonerado, con marca y presentacion completas
+--
+--   Las marcas son reales; los codigos de barras son ficticios
+--   pero con formato EAN-13 valido.
 -- ------------------------------------------------------------
-INSERT INTO productos (id, codigo_barras, nombre, categoria, precio_venta, costo) VALUES
-  ( 1, '7751234000011', 'Arroz Costeno 1 kg',              'Abarrotes',  4.50, 3.60),
-  ( 2, '7751234000028', 'Aceite Primor 1 L',               'Abarrotes',  9.90, 8.20),
-  ( 3, '7751234000035', 'Leche Gloria tarro 400 g',        'Lacteos',    5.20, 4.30),
-  ( 4, '7751234000042', 'Pan frances (unidad)',            'Panaderia',  0.50, 0.30),
-  ( 5, '7751234000059', 'Coca-Cola 500 ml',                'Bebidas',    3.00, 2.10),
-  ( 6, '7751234000066', 'Agua San Luis 625 ml',            'Bebidas',    1.50, 0.90),
-  ( 7, '7751234000073', 'Papel higienico Elite x 4',       'Limpieza',   6.90, 5.40),
-  ( 8, '7751234000080', 'Detergente Bolivar 780 g',        'Limpieza',   8.50, 6.80),
-  ( 9, '7751234000097', 'Galleta Soda Field',              'Snacks',     1.20, 0.80),
-  (10, '7751234000103', 'Atun Florida 170 g',              'Abarrotes',  4.80, 3.70);
+INSERT INTO productos
+  (id, codigo_barras, nombre, descripcion, marca, categoria, presentacion, unidad_medida, precio_venta, costo, afecto_igv, activo)
+VALUES
+  (1, '7751234000011', 'Arroz Costeno 1 kg',
+      'Bolsa de arroz extra de 1 kg', 'Costeno', 'Abarrotes', '1 kg', 'unidad', 4.50, 3.60, FALSE, TRUE),
+  (2, '7751234000059', 'Coca-Cola 500 ml',
+      NULL, 'Coca-Cola', 'Bebidas', '500 ml', 'unidad', 3.00, 2.10, TRUE, TRUE),
+  (3, '7751234000042', 'Pan frances (unidad)',
+      NULL, 'Panaderia propia', 'Panaderia', 'unidad', 'unidad', 0.50, 0.30, FALSE, TRUE),
+  (4, '7751234000073', 'Papel higienico Elite x 4',
+      'Paquete de 4 rollos doble hoja', 'Elite', 'Limpieza', 'x 4 rollos', 'paquete', 6.90, 5.40, TRUE, TRUE),
+  (5, '7751234000103', 'Atun Florida 170 g',
+      NULL, 'Florida', 'Abarrotes', '170 g', 'unidad', 4.80, 3.70, FALSE, TRUE),
+  (6, '7751234000097', 'Galleta Soda Field',
+      NULL, 'Field', 'Snacks', '1 unidad', 'unidad', 1.20, 0.80, TRUE, TRUE),
+  (7, '7751234000080', 'Detergente Bolivar 780 g',
+      NULL, 'Bolivar', 'Limpieza', '780 g', 'unidad', 8.50, 6.80, TRUE, FALSE),
+  (8, '7751234000035', 'Leche Gloria tarro 400 g',
+      'Leche evaporada entera', 'Gloria', 'Lacteos', '400 g', 'unidad', 5.20, 4.30, FALSE, TRUE);
 
 -- ------------------------------------------------------------
 -- INVENTARIO (stock por sucursal)
---  A proposito hay casos "interesantes" para la demo:
---   - producto 7: stock bajo en las dos tiendas (4 y 2, minimo 6)
---   - producto 9: stock 0 en la sucursal 2  -> no se puede vender ahi
---   - producto 10: stock bajo (3 y 1)       -> aparece en stock bajo
+--  Dos filas por producto (una por tienda) = 16 filas.
+--  Casos armados para la demo:
+--   - producto 4: stock 4 < minimo 6   -> stock bajo
+--   - producto 5: stock 3 < minimo 8   -> stock bajo en ambas tiendas
+--   - producto 6: stock 0 en sucursal 2 -> no se puede vender ahi
 -- ------------------------------------------------------------
 INSERT INTO inventario (producto_id, sucursal_id, stock, stock_minimo) VALUES
   -- Sucursal 1 (Principal)
-  ( 1, 1, 50, 10), ( 2, 1, 30, 10), ( 3, 1, 40, 10), ( 4, 1, 100, 20), ( 5, 1, 60, 12),
-  ( 6, 1, 80, 12), ( 7, 1,  4,  6), ( 8, 1, 18, 10), ( 9, 1,  25, 10), (10, 1,  3,  8),
+  (1, 1, 50, 10), (2, 1, 36, 12), (3, 1,  80, 20), (4, 1, 4, 6),
+  (5, 1,  3,  8), (6, 1, 25, 10), (7, 1,  18, 10), (8, 1, 40, 10),
   -- Sucursal 2 (Yanahuara)
-  ( 1, 2, 20, 10), ( 2, 2, 15, 10), ( 3, 2, 25, 10), ( 4, 2,  60, 20), ( 5, 2, 30, 12),
-  ( 6, 2, 40, 12), ( 7, 2,  2,  6), ( 8, 2,  9, 10), ( 9, 2,   0, 10), (10, 2,  1,  8);
+  (1, 2, 20, 10), (2, 2, 18, 12), (3, 2,  50, 20), (4, 2, 9, 6),
+  (5, 2,  5,  8), (6, 2,  0, 10), (7, 2,   9, 10), (8, 2, 22, 10);
 
 -- ------------------------------------------------------------
 -- CLIENTES
