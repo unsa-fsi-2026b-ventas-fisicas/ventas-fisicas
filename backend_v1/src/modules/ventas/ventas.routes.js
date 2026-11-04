@@ -10,11 +10,18 @@
 
 const { Router } = require('express');
 const controlador = require('./ventas.controller');
+const { soloRoles } = require('../../middlewares/auth');
 
 const rutas = Router();
 
 rutas.post('/', controlador.crear);
 rutas.get('/', controlador.listar);
+
+// Anular y devolver mueven plata y stock: solo el administrador.
+// El cajero vende, pero no se auto-autoriza una devolucion.
+rutas.post('/:id/anular', soloRoles('administrador'), controlador.anular);
+rutas.post('/:id/devoluciones', soloRoles('administrador'), controlador.devolver);
+
 rutas.get('/:id', controlador.obtener);
 
 module.exports = rutas;

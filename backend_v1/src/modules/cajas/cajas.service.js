@@ -7,8 +7,14 @@
 //    cerrar -> cuenta el dinero y se compara con lo esperado
 //
 //  Arqueo = comparar lo esperado con lo contado:
-//    total_esperado = monto_inicial + ventas cobradas en efectivo
+//    total_esperado = monto_inicial
+//                   + ventas cobradas en efectivo
+//                   - devoluciones pagadas en efectivo
 //    diferencia     = monto_contado - total_esperado
+//
+//  Las devoluciones en efectivo salen del cajon, por eso se
+//  restan. Las devoluciones por tarjeta/billetera no tocan el
+//  cajon y no afectan el arqueo.
 //
 //  Regla del negocio: un cajero solo puede tener UNA caja abierta.
 //  Lo garantiza un indice UNIQUE parcial en la base de datos
@@ -59,12 +65,24 @@ async function buscarCaja(id, ejecutor = query) {
 }
 
 // ------------------------------------------------------------
-// Suma de ventas cobradas EN EFECTIVO en una caja.
-// Solo cuentan las ventas emitidas (las anuladas no suman).
+// Efectivo NETO de una caja:
+//   ventas cobradas en efectivo - devoluciones en efectivo
+//
+// Solo cuentan las ventas emitidas: una venta anulada deja de
+// sumar (el dinero se devolvio) y tampoco se resta su devolucion,
+// para no descontar dos veces el mismo billete.
 // ------------------------------------------------------------
 async function calcularEfectivo(cajaId, ejecutor = query) {
   const { rows } = await ejecutor(
-    `SELECT COALESCE(SUM(p.monto), 0) AS efectivo
+    `SELECT COALESCE(SUM(p.monto), 0)
+            - COALESCE((
+                SELECT SUM(d.total)
+                  FROM devoluciones d
+                  JOIN ventas v2 ON v2.id = d.venta_id
+                 WHERE v2.caja_id = $1
+                   AND v2.estado = 'emitida'
+                   AND d.metodo = 'efectivo'
+              ), 0) AS efectivo
        FROM pagos p
        JOIN ventas v ON v.id = p.venta_id
       WHERE v.caja_id = $1
@@ -73,6 +91,23 @@ async function calcularEfectivo(cajaId, ejecutor = query) {
     [cajaId]
   );
   return redondear(rows[0].efectivo);
+}
+
+// ------------------------------------------------------------
+// Solo el total devuelto en efectivo (para mostrarlo aparte
+// en la pantalla de caja, sin mezclarlo con las ventas).
+// ------------------------------------------------------------
+async function calcularDevolucionesEfectivo(cajaId, ejecutor = query) {
+  const { rows } = await ejecutor(
+    `SELECT COALESCE(SUM(d.total), 0) AS devuelto
+       FROM devoluciones d
+       JOIN ventas v ON v.id = d.venta_id
+      WHERE v.caja_id = $1
+        AND v.estado = 'emitida'
+        AND d.metodo = 'efectivo'`,
+    [cajaId]
+  );
+  return redondear(rows[0].devuelto);
 }
 
 // ------------------------------------------------------------
@@ -138,6 +173,7 @@ async function obtenerAbierta(usuario) {
   if (!caja) return null; // no es un error: simplemente no abrio caja todavia
 
   const efectivo = await calcularEfectivo(caja.id);
+  const devuelto = await calcularDevolucionesEfectivo(caja.id);
 
   const { rows: conteo } = await query(
     `SELECT COUNT(*)::int AS cantidad
@@ -148,7 +184,9 @@ async function obtenerAbierta(usuario) {
 
   return {
     ...caja,
-    ventas_efectivo: efectivo,
+    ventas_efectivo: redondear(efectivo + devuelto),
+    devoluciones_efectivo: devuelto,
+    efectivo_neto: efectivo,
     total_esperado_parcial: redondear(Number(caja.monto_inicial) + efectivo),
     cantidad_ventas: conteo[0].cantidad,
   };
@@ -185,6 +223,7 @@ async function cerrar(id, usuario, datos) {
     }
 
     const efectivo = await calcularEfectivo(id, cliente.query.bind(cliente));
+    const devuelto = await calcularDevolucionesEfectivo(id, cliente.query.bind(cliente));
     const esperado = redondear(Number(caja.monto_inicial) + efectivo);
     const contadoRedondeado = redondear(contado);
     const diferencia = redondear(contadoRedondeado - esperado);
@@ -208,6 +247,9 @@ async function cerrar(id, usuario, datos) {
 
     return {
       ...cerrada,
+      ventas_efectivo: redondear(efectivo + devuelto),
+      devoluciones_efectivo: devuelto,
+      efectivo_neto: efectivo,
       resultado,
       mensaje: mensajeArqueo(resultado, diferencia),
     };
@@ -271,9 +313,12 @@ async function obtenerDetalle(id, usuario) {
   // Si esta abierta, mostramos el avance en vivo.
   if (caja.estado === 'abierta') {
     const efectivo = await calcularEfectivo(caja.id);
+    const devuelto = await calcularDevolucionesEfectivo(caja.id);
     return {
       ...caja,
-      ventas_efectivo: efectivo,
+      ventas_efectivo: redondear(efectivo + devuelto),
+      devoluciones_efectivo: devuelto,
+      efectivo_neto: efectivo,
       total_esperado_parcial: redondear(Number(caja.monto_inicial) + efectivo),
     };
   }

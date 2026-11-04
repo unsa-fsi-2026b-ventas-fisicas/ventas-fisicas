@@ -37,4 +37,26 @@ async function obtener(req, res) {
   res.json({ ok: true, datos });
 }
 
-module.exports = { crear, listar, obtener };
+// POST /api/ventas/:id/anular  (solo administrador)
+async function anular(req, res) {
+  const datos = await servicio.anular(req.params.id, req.usuario, req.body);
+
+  res.json({
+    ok: true,
+    mensaje: 'Venta anulada. El stock fue restituido.',
+    datos,
+  });
+}
+
+// POST /api/ventas/:id/devoluciones  (solo administrador)
+async function devolver(req, res) {
+  const datos = await servicio.devolver(req.params.id, req.usuario, req.body);
+
+  res.status(201).json({
+    ok: true,
+    mensaje: 'Devolucion registrada. El stock fue restituido.',
+    datos,
+  });
+}
+
+module.exports = { crear, listar, obtener, anular, devolver };

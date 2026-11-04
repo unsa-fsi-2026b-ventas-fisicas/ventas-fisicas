@@ -186,6 +186,10 @@ CREATE TABLE ventas (
   total             NUMERIC(10,2) NOT NULL CHECK (total >= 0),
   estado            VARCHAR(10)   NOT NULL DEFAULT 'emitida' CHECK (estado IN ('emitida', 'anulada')),
   vuelto            NUMERIC(10,2) NOT NULL DEFAULT 0 CHECK (vuelto >= 0),
+  -- Acumulado de lo devuelto (devoluciones parciales). El total
+  -- original NO se modifica: total_neto = total - total_devuelto.
+  total_devuelto    NUMERIC(10,2) NOT NULL DEFAULT 0
+                    CHECK (total_devuelto >= 0 AND total_devuelto <= total),
   motivo_anulacion  VARCHAR(300),
   anulada_por       INT           REFERENCES usuarios(id),
   anulada_en        TIMESTAMPTZ,
@@ -228,13 +232,18 @@ CREATE TABLE pagos (
 -- 11. DEVOLUCIONES
 --  Se permite devolucion parcial (algunos items) o total.
 --  No se borra nada: se registra el hecho y sube el stock.
+--
+--  metodo: como se le devolvio el dinero al cliente. Solo el
+--  efectivo afecta el arqueo de caja (sale del cajon).
 -- ============================================================
 CREATE TABLE devoluciones (
   id          SERIAL PRIMARY KEY,
   venta_id    INT           NOT NULL REFERENCES ventas(id),
   usuario_id  INT           NOT NULL REFERENCES usuarios(id),
   motivo      VARCHAR(300)  NOT NULL,
-  total       NUMERIC(10,2) NOT NULL DEFAULT 0,
+  metodo      VARCHAR(10)   NOT NULL DEFAULT 'efectivo'
+              CHECK (metodo IN ('efectivo', 'tarjeta', 'billetera')),
+  total       NUMERIC(10,2) NOT NULL DEFAULT 0 CHECK (total >= 0),
   creada_en   TIMESTAMPTZ   NOT NULL DEFAULT NOW()
 );
 
@@ -265,3 +274,6 @@ CREATE INDEX idx_venta_detalle_venta     ON venta_detalle (venta_id);
 CREATE INDEX idx_venta_detalle_producto  ON venta_detalle (producto_id); -- mas vendidos
 CREATE INDEX idx_pagos_venta             ON pagos (venta_id);
 CREATE INDEX idx_clientes_nombre         ON clientes (nombre);
+CREATE INDEX idx_devoluciones_venta      ON devoluciones (venta_id);        -- devoluciones de una venta
+CREATE INDEX idx_devoluciones_fecha      ON devoluciones (creada_en);       -- devoluciones del dia
+CREATE INDEX idx_devolucion_detalle_dev  ON devolucion_detalle (devolucion_id);

@@ -156,7 +156,8 @@ async function buscarVenta(id, ejecutor = query) {
             v.usuario_id, u.nombre AS cajero,
             v.caja_id, v.sucursal_id, s.nombre AS sucursal,
             c.nombre AS cliente, c.numero_documento AS cliente_documento,
-            v.subtotal, v.igv, v.total, v.vuelto, v.estado,
+            v.subtotal, v.igv, v.total, v.vuelto,
+            v.total_devuelto, v.estado,
             v.motivo_anulacion, v.creada_en,
             v.anulada_en, v.anulada_por
        FROM ventas v
@@ -189,12 +190,288 @@ async function buscarVenta(id, ejecutor = query) {
     [id]
   );
 
+  // Historial de devoluciones: quien devolvio, cuanto y por que.
+  const { rows: devoluciones } = await ejecutor(
+    `SELECT d.id, d.motivo, d.metodo, d.total, d.creada_en,
+            u.nombre AS registrada_por
+       FROM devoluciones d
+       JOIN usuarios u ON u.id = d.usuario_id
+      WHERE d.venta_id = $1
+      ORDER BY d.id`,
+    [id]
+  );
+
   return {
     ...venta,
     numero_comprobante: numeroComprobante(venta),
+    total_neto: totalNetoVenta(venta),
     items,
     pagos,
+    devoluciones,
   };
+}
+
+// ------------------------------------------------------------
+// Utilidades de dinero para devoluciones
+//  total_neto = total original - lo ya devuelto
+// ------------------------------------------------------------
+function restarSoles(total, devuelto) {
+  return (Number(total) - Number(devuelto)).toFixed(2);
+}
+
+// Importe que realmente queda en la venta:
+//  - anulada -> 0 (se devolvio todo, deja de facturar)
+//  - emitida -> total - devoluciones parciales
+function totalNetoVenta(venta) {
+  if (venta.estado === 'anulada') return '0.00';
+  return restarSoles(venta.total, venta.total_devuelto);
+}
+
+function validarMotivo(motivo) {
+  const limpio = String(motivo ?? '').trim();
+
+  if (limpio.length < 3) {
+    throw new ErrorHttp(400, 'El motivo debe tener al menos 3 caracteres.');
+  }
+
+  if (limpio.length > 300) {
+    throw new ErrorHttp(400, 'El motivo no puede superar los 300 caracteres.');
+  }
+
+  return limpio;
+}
+
+// ------------------------------------------------------------
+// ANULAR VENTA (solo administrador, lo exige la ruta)
+// ------------------------------------------------------------
+async function anular(id, usuario, datos) {
+  const motivo = validarMotivo(datos.motivo);
+
+  return transaccion(async (cliente) => {
+    // Bloqueamos la venta: si dos personas anulan a la vez, la
+    // segunda espera y ya la encuentra anulada.
+    const { rows: ventas } = await cliente.query(
+      'SELECT * FROM ventas WHERE id = $1 FOR UPDATE',
+      [id]
+    );
+
+    const venta = ventas[0];
+    if (!venta) {
+      throw new ErrorHttp(404, 'Venta no encontrada.');
+    }
+
+    if (venta.estado === 'anulada') {
+      throw new ErrorHttp(409, 'La venta ya esta anulada.');
+    }
+
+    // Devolvemos al stock SOLO lo que aun no se habia devuelto.
+    // Lo ya devuelto se repuso en su momento; si lo sumaramos otra
+    // vez, el inventario quedaria inflado.
+    const { rows: items } = await cliente.query(
+      `SELECT id, producto_id, cantidad, cantidad_devuelta
+         FROM venta_detalle
+        WHERE venta_id = $1
+        ORDER BY producto_id
+        FOR UPDATE`,
+      [id]
+    );
+
+    for (const item of items) {
+      const pendiente = item.cantidad - item.cantidad_devuelta;
+      if (pendiente > 0) {
+        await cliente.query(
+          `UPDATE inventario
+              SET stock = stock + $1
+            WHERE producto_id = $2
+              AND sucursal_id = $3`,
+          [pendiente, item.producto_id, venta.sucursal_id]
+        );
+      }
+    }
+
+    await cliente.query(
+      `UPDATE ventas
+          SET estado = 'anulada',
+              motivo_anulacion = $1,
+              anulada_por = $2,
+              anulada_en = NOW()
+        WHERE id = $3`,
+      [motivo, usuario.id, id]
+    );
+
+    // OJO: no tocamos pagos. Al quedar 'anulada', calcularEfectivo
+    // la excluye sola del arqueo. Si tambien descontaramos un
+    // reembolso, restariamos dos veces el mismo dinero.
+    return await buscarVenta(id, cliente.query.bind(cliente));
+  });
+}
+
+// ------------------------------------------------------------
+// DEVOLVER ITEMS (parcial o total, solo administrador)
+//  - Sube el stock de los productos devueltos.
+//  - Acumula cantidad_devuelta y total_devuelto.
+//  - Registra cabecera + detalle de la devolucion (auditoria).
+// ------------------------------------------------------------
+async function devolver(id, usuario, datos) {
+  const motivo = validarMotivo(datos.motivo);
+  const metodo = datos.metodo ?? 'efectivo';
+
+  if (!METODOS_PAGO.includes(metodo)) {
+    throw new ErrorHttp(400, `Metodo de reembolso invalido. Debe ser: ${METODOS_PAGO.join(', ')}.`);
+  }
+
+  if (!Array.isArray(datos.items) || datos.items.length === 0) {
+    throw new ErrorHttp(400, 'Debes indicar al menos un item a devolver.');
+  }
+
+  const pedidos = datos.items.map((item, indice) => {
+    const detalleId = Number(item.venta_detalle_id);
+    const cantidad = Number(item.cantidad);
+
+    if (!Number.isInteger(detalleId) || detalleId <= 0) {
+      throw new ErrorHttp(400, `El item ${indice + 1} no tiene un venta_detalle_id valido.`);
+    }
+
+    if (!Number.isInteger(cantidad) || cantidad <= 0) {
+      throw new ErrorHttp(400, `La cantidad a devolver del item ${indice + 1} debe ser un entero mayor a 0.`);
+    }
+
+    return { venta_detalle_id: detalleId, cantidad };
+  });
+
+  // No permitimos el mismo item dos veces (evita sumar mal).
+  const idsPedidos = new Set();
+  for (const pedido of pedidos) {
+    if (idsPedidos.has(pedido.venta_detalle_id)) {
+      throw new ErrorHttp(400, 'Hay un item repetido en la devolucion. Junta las cantidades.');
+    }
+    idsPedidos.add(pedido.venta_detalle_id);
+  }
+
+  return transaccion(async (cliente) => {
+    const { rows: ventas } = await cliente.query(
+      'SELECT * FROM ventas WHERE id = $1 FOR UPDATE',
+      [id]
+    );
+
+    const venta = ventas[0];
+    if (!venta) {
+      throw new ErrorHttp(404, 'Venta no encontrada.');
+    }
+
+    if (venta.estado === 'anulada') {
+      throw new ErrorHttp(409, 'No se puede devolver items de una venta anulada.');
+    }
+
+    // La devolucion en efectivo sale del cajon. Si la caja de esa
+    // venta ya se cerro, el arqueo guardado no se puede corregir,
+    // asi que la rechazamos en vez de dejar numeros inconsistentes.
+    const { rows: cajas } = await cliente.query(
+      'SELECT estado FROM cajas WHERE id = $1',
+      [venta.caja_id]
+    );
+
+    if (!cajas[0] || cajas[0].estado !== 'abierta') {
+      throw new ErrorHttp(
+        409,
+        'La caja de esta venta ya esta cerrada. No se puede registrar la devolucion.'
+      );
+    }
+
+    const { rows: lineas } = await cliente.query(
+      `SELECT id, producto_id, cantidad, cantidad_devuelta, precio_unitario
+         FROM venta_detalle
+        WHERE venta_id = $1
+        ORDER BY producto_id
+        FOR UPDATE`,
+      [id]
+    );
+
+    const porId = new Map(lineas.map((linea) => [linea.id, linea]));
+    const detalleDevolucion = [];
+    let totalCent = 0;
+
+    for (const pedido of pedidos) {
+      const linea = porId.get(pedido.venta_detalle_id);
+      if (!linea) {
+        throw new ErrorHttp(404, `El item ${pedido.venta_detalle_id} no pertenece a esta venta.`);
+      }
+
+      const disponible = linea.cantidad - linea.cantidad_devuelta;
+      if (pedido.cantidad > disponible) {
+        throw new ErrorHttp(
+          400,
+          `No puedes devolver ${pedido.cantidad} unidades: solo quedan ${disponible} por devolver.`
+        );
+      }
+
+      const montoCent = aCentavos(linea.precio_unitario) * pedido.cantidad;
+      totalCent += montoCent;
+
+      detalleDevolucion.push({
+        venta_detalle_id: linea.id,
+        producto_id: linea.producto_id,
+        cantidad: pedido.cantidad,
+        monto: formatoSoles(montoCent),
+      });
+    }
+
+    // --- Cabecera de la devolucion ---
+    const { rows: devoluciones } = await cliente.query(
+      `INSERT INTO devoluciones (venta_id, usuario_id, motivo, metodo, total)
+            VALUES ($1, $2, $3, $4, $5)
+         RETURNING id, creada_en`,
+      [id, usuario.id, motivo, metodo, aSoles(totalCent)]
+    );
+
+    const devolucionId = devoluciones[0].id;
+
+    // --- Detalle + reposicion de stock + acumulados ---
+    for (const item of detalleDevolucion) {
+      await cliente.query(
+        `INSERT INTO devolucion_detalle
+           (devolucion_id, venta_detalle_id, cantidad, monto)
+         VALUES ($1, $2, $3, $4)`,
+        [devolucionId, item.venta_detalle_id, item.cantidad, item.monto]
+      );
+
+      await cliente.query(
+        `UPDATE venta_detalle
+            SET cantidad_devuelta = cantidad_devuelta + $1
+          WHERE id = $2`,
+        [item.cantidad, item.venta_detalle_id]
+      );
+
+      await cliente.query(
+        `UPDATE inventario
+            SET stock = stock + $1
+          WHERE producto_id = $2
+            AND sucursal_id = $3`,
+        [item.cantidad, item.producto_id, venta.sucursal_id]
+      );
+    }
+
+    // El CHECK de la tabla impide que total_devuelto supere total.
+    await cliente.query(
+      `UPDATE ventas
+          SET total_devuelto = total_devuelto + $1
+        WHERE id = $2`,
+      [aSoles(totalCent), id]
+    );
+
+    return {
+      devolucion: {
+        id: devolucionId,
+        venta_id: Number(id),
+        motivo,
+        metodo,
+        total: formatoSoles(totalCent),
+        creada_en: devoluciones[0].creada_en,
+        items: detalleDevolucion,
+      },
+      venta: await buscarVenta(id, cliente.query.bind(cliente)),
+    };
+  });
 }
 
 // ------------------------------------------------------------
@@ -419,7 +696,8 @@ async function listar(usuario, filtros = {}) {
                     v.cliente_id, c.nombre AS cliente,
                     v.usuario_id, u.nombre AS cajero,
                     v.sucursal_id, s.nombre AS sucursal,
-                    v.subtotal, v.igv, v.total, v.vuelto, v.estado, v.creada_en
+                    v.subtotal, v.igv, v.total, v.vuelto,
+                    v.total_devuelto, v.estado, v.creada_en
                FROM ventas v
                JOIN usuarios u     ON u.id = v.usuario_id
                JOIN sucursales s   ON s.id = v.sucursal_id
@@ -461,6 +739,7 @@ async function listar(usuario, filtros = {}) {
   return rows.map((venta) => ({
     ...venta,
     numero_comprobante: numeroComprobante(venta),
+    total_neto: totalNetoVenta(venta),
   }));
 }
 
@@ -481,4 +760,4 @@ async function obtener(id, usuario) {
   return venta;
 }
 
-module.exports = { crear, listar, obtener, numeroComprobante };
+module.exports = { crear, listar, obtener, anular, devolver, numeroComprobante };
