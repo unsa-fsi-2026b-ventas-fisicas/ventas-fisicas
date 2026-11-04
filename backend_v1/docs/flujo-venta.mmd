@@ -1,0 +1,24 @@
+sequenceDiagram
+    autonumber
+    participant POS as Frontend / POS
+    participant API as API Express
+    participant DB as PostgreSQL
+
+    POS->>API: POST /api/ventas {items, pagos}
+    API->>DB: BEGIN
+    API->>DB: caja abierta del usuario (FOR SHARE)
+    alt sin caja abierta
+        API-->>POS: 409 "Abre tu caja antes de vender"
+    end
+    API->>DB: leer productos (precio y afecto_igv reales)
+    API->>API: calcular base, IGV y total en centavos
+    API->>API: cuadrar pagos y calcular vuelto
+    API->>DB: siguiente correlativo (ON CONFLICT)
+    API->>DB: descontar stock (UPDATE ... WHERE stock >= n)
+    alt stock insuficiente
+        API->>DB: ROLLBACK
+        API-->>POS: 409 "No hay stock suficiente"
+    end
+    API->>DB: INSERT ventas / venta_detalle / pagos
+    API->>DB: COMMIT
+    API-->>POS: 201 venta completa con número de comprobante

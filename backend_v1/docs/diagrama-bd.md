@@ -6,6 +6,33 @@ precios copiados, stock por sucursal y movimientos registrados, no borrados.
 
 ---
 
+## Archivos del diagrama
+
+Los dos diagramas están en tres formatos: fuente editable, vectorial e imagen.
+
+| Diagrama | PNG (diapositivas) | SVG (vectorial) | Fuente Mermaid |
+|---|---|---|---|
+| Modelo entidad-relación | [`diagrama-bd.png`](diagrama-bd.png) | [`diagrama-bd.svg`](diagrama-bd.svg) | [`diagrama-bd.mmd`](diagrama-bd.mmd) |
+| Flujo de una venta | [`flujo-venta.png`](flujo-venta.png) | [`flujo-venta.svg`](flujo-venta.svg) | [`flujo-venta.mmd`](flujo-venta.mmd) |
+
+Usa el **PNG** para PowerPoint o Word y el **SVG** si vas a ampliar sin que se pixele.
+El `.mmd` es el texto Mermaid: si cambias una tabla, editas ese archivo y vuelves a exportar.
+
+Para regenerar las imágenes (requiere `chromium` instalado):
+
+```bash
+npx -y @mermaid-js/mermaid-cli -i docs/diagrama-bd.mmd   -o docs/diagrama-bd.svg   -b white -w 2400
+npx -y @mermaid-js/mermaid-cli -i docs/diagrama-bd.mmd   -o docs/diagrama-bd.png   -b white -w 2400 -s 2
+npx -y @mermaid-js/mermaid-cli -i docs/flujo-venta.mmd   -o docs/flujo-venta.svg   -b white -w 1600
+npx -y @mermaid-js/mermaid-cli -i docs/flujo-venta.mmd   -o docs/flujo-venta.png   -b white -w 1600 -s 2
+```
+
+> En Linux sin entorno gráfico hay que agregar `-p` con un archivo de Puppeteer que incluya
+> `--no-sandbox`. En GitHub el Mermaid de abajo se dibuja solo; los archivos exportados son
+> para la exposición y el informe.
+
+---
+
 ## Diagrama entidad-relación
 
 ```mermaid

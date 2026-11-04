@@ -36,6 +36,8 @@ backend_v1/
 │   └── 02_seed.sql            # datos de prueba (2 sucursales, 8 productos...)
 ├── docs/
 │   ├── diagrama-bd.md         # diagrama ER + explicación de cada tabla
+│   ├── diagrama-bd.png/.svg   # modelo ER exportado (y .mmd como fuente)
+│   ├── flujo-venta.png/.svg   # secuencia de una venta (y .mmd)
 │   ├── guion-defensa.md       # guion de 2 minutos
 │   └── coleccion-postman.json # colección importable
 ├── scripts/
@@ -293,6 +295,8 @@ Sin fechas, todos los reportes usan **el día de hoy**.
 ## Documentación adicional
 
 - [`docs/diagrama-bd.md`](docs/diagrama-bd.md) — diagrama ER, propósito de cada tabla y flujo de una venta.
+- [`docs/diagrama-bd.png`](docs/diagrama-bd.png) / [`docs/diagrama-bd.svg`](docs/diagrama-bd.svg) — el modelo ER listo para diapositivas e informe (el `.mmd` es la fuente editable).
+- [`docs/flujo-venta.png`](docs/flujo-venta.png) / [`docs/flujo-venta.svg`](docs/flujo-venta.svg) — diagrama de secuencia de una venta.
 - [`docs/guion-defensa.md`](docs/guion-defensa.md) — guion de 2 minutos y preguntas frecuentes.
 - [`docs/coleccion-postman.json`](docs/coleccion-postman.json) — importar en Postman y ejecutar el flujo completo.
 
