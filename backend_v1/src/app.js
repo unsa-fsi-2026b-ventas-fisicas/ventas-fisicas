@@ -1,0 +1,57 @@
+// ============================================================
+//  Configuracion de Express
+// ------------------------------------------------------------
+//  Este archivo arma la aplicacion: middlewares, rutas y manejo
+//  de errores. No abre el puerto; de eso se encarga server.js.
+// ------------------------------------------------------------
+//  Nota: las variables del archivo .env las carga config/db.js,
+//  que es el primer modulo que necesita la configuracion.
+// ============================================================
+
+const express = require('express');
+const cors = require('cors');
+const { query } = require('./config/db');
+const { noEncontrada, manejadorErrores } = require('./middlewares/errores');
+
+const app = express();
+
+// 1) CORS: permite que el frontend (React en http://localhost:5173)
+//    llame a esta API que corre en otro puerto. Sin esto, el navegador
+//    bloquea la peticion por seguridad.
+app.use(cors());
+
+// 2) Lee el cuerpo de las peticiones en formato JSON.
+//    Gracias a esto, en los controladores tenemos req.body.
+app.use(express.json());
+
+// 3) Ruta de salud: sirve para comprobar que el servidor esta vivo
+//    y que la base de datos responde.
+app.get('/api/health', async (req, res) => {
+  let baseDatos = 'ok';
+  try {
+    await query('SELECT 1');
+  } catch (error) {
+    baseDatos = 'sin conexion';
+  }
+
+  const estado = baseDatos === 'ok' ? 200 : 503;
+  res.status(estado).json({
+    ok: baseDatos === 'ok',
+    mensaje: 'API de Ventas Fisicas funcionando',
+    baseDatos,
+    hora: new Date().toISOString(),
+  });
+});
+
+// 4) Rutas de los modulos.
+//    Se van descomentando etapa por etapa, a medida que las creamos.
+//    Ejemplo futuro:
+//    app.use('/api/productos', rutasProductos);
+
+// 5) Si ninguna ruta coincidio, respondemos 404 en JSON.
+app.use(noEncontrada);
+
+// 6) Manejador central de errores (siempre al final).
+app.use(manejadorErrores);
+
+module.exports = app;

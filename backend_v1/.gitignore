@@ -1,0 +1,12 @@
+# Dependencias (se reinstalan con "npm install")
+node_modules/
+
+# Variables de entorno con contrasenas: nunca se suben
+.env
+
+# Archivos de log
+*.log
+npm-debug.log*
+
+# Basura del sistema operativo
+.DS_Store
