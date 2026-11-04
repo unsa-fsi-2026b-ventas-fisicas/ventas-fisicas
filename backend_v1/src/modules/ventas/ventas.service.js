@@ -125,17 +125,25 @@ function cuadrarPagos(pagos, totalCent) {
   const pagosFinales = pagos.map((pago) => ({ ...pago }));
 
   if (vueltoCent > 0) {
-    const efectivo = pagosFinales.find((pago) => pago.metodo === 'efectivo');
+    // El vuelto sale del cajon: solo puede descontarse de pagos en
+    // efectivo. Si hay varios, lo repartimos entre ellos (pago mixto).
+    let restante = vueltoCent;
 
-    if (!efectivo) {
-      throw new ErrorHttp(400, 'Solo se puede dar vuelto cuando hay un pago en efectivo.');
+    for (const pago of pagosFinales) {
+      if (restante === 0) break;
+      if (pago.metodo !== 'efectivo') continue;
+
+      const aplicado = Math.min(pago.montoCent, restante);
+      pago.montoCent -= aplicado;
+      restante -= aplicado;
     }
 
-    if (efectivo.montoCent < vueltoCent) {
-      throw new ErrorHttp(400, 'El vuelto no puede superar el efectivo recibido.');
+    if (restante > 0) {
+      throw new ErrorHttp(
+        400,
+        'El vuelto no puede superar el efectivo recibido. Revisa los montos de pago.'
+      );
     }
-
-    efectivo.montoCent -= vueltoCent;
   }
 
   // Si un pago quedo en 0 (por ejemplo, el efectivo se fue todo en vuelto),
