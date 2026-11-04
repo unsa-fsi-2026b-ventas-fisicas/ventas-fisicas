@@ -101,7 +101,7 @@ async function login(usuario, password) {
 // ------------------------------------------------------------
 async function obtenerPerfil(id) {
   const { rows } = await query(
-    `SELECT id, nombre, usuario, rol, activo, creado_en
+    `SELECT id, nombre, usuario, rol, sucursal_id, activo, creado_en
        FROM usuarios
       WHERE id = $1`,
     [id]

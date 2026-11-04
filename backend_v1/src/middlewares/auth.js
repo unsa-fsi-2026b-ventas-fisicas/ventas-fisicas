@@ -42,7 +42,7 @@ async function verificarToken(req, res, next) {
 
   // El token dice quien sos; la base dice si podes seguir y con que rol.
   const { rows } = await query(
-    'SELECT id, nombre, usuario, rol, activo FROM usuarios WHERE id = $1',
+    'SELECT id, nombre, usuario, rol, sucursal_id, activo FROM usuarios WHERE id = $1',
     [datosToken.id]
   );
 
@@ -57,6 +57,7 @@ async function verificarToken(req, res, next) {
     nombre: usuario.nombre,
     usuario: usuario.usuario,
     rol: usuario.rol,
+    sucursal_id: usuario.sucursal_id,
   };
 
   next();

@@ -48,6 +48,11 @@ CREATE TABLE sucursales (
 -- 2. USUARIOS Y ROLES
 --  La contrasena nunca se guarda en texto plano: se guarda su
 --  hash (bcrypt). Ni el administrador puede leer la original.
+--
+--  sucursal_id: la tienda donde trabaja el usuario.
+--   - Un CAJERO siempre debe tener sucursal: abre su caja ahi
+--     y todas sus ventas pertenecen a esa tienda.
+--   - Un ADMINISTRADOR puede no tenerla (trabaja en varias).
 -- ============================================================
 CREATE TABLE usuarios (
   id             SERIAL PRIMARY KEY,
@@ -55,6 +60,7 @@ CREATE TABLE usuarios (
   usuario        VARCHAR(50)  NOT NULL UNIQUE,  -- nombre de login
   password_hash  VARCHAR(100) NOT NULL,
   rol            VARCHAR(20)  NOT NULL CHECK (rol IN ('cajero', 'administrador')),
+  sucursal_id    INT          REFERENCES sucursales(id),
   activo         BOOLEAN      NOT NULL DEFAULT TRUE,
   creado_en      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
@@ -245,6 +251,7 @@ CREATE TABLE devolucion_detalle (
 --  Las llaves foraneas NO se indexan solas, y las usamos mucho
 --  para reportes, asi que las creamos a mano.
 -- ============================================================
+CREATE INDEX idx_usuarios_sucursal       ON usuarios (sucursal_id);
 CREATE INDEX idx_productos_nombre        ON productos (nombre);        -- busqueda por nombre
 CREATE INDEX idx_productos_marca         ON productos (marca);         -- busqueda por marca
 CREATE INDEX idx_productos_categoria     ON productos (categoria);     -- filtro del catalogo

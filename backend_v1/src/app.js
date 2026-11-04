@@ -17,6 +17,9 @@ const rutasAuth = require('./modules/auth/auth.routes');
 const rutasUsuarios = require('./modules/usuarios/usuarios.routes');
 const rutasProductos = require('./modules/productos/productos.routes');
 const rutasInventario = require('./modules/inventario/inventario.routes');
+const rutasClientes = require('./modules/clientes/clientes.routes');
+const rutasCajas = require('./modules/cajas/cajas.routes');
+const rutasSucursales = require('./modules/sucursales/sucursales.routes');
 
 const app = express();
 
@@ -60,6 +63,12 @@ app.use('/api/usuarios', verificarToken, soloRoles('administrador'), rutasUsuari
 // y adentro de cada archivo de rutas se decide que accion pide admin.
 app.use('/api/productos', verificarToken, rutasProductos);
 app.use('/api/inventario', verificarToken, rutasInventario);
+
+// Clientes, cajas y sucursales: cajero y administrador.
+// Las reglas finas (quien puede ver que caja) viven en el servicio.
+app.use('/api/clientes', verificarToken, rutasClientes);
+app.use('/api/cajas', verificarToken, rutasCajas);
+app.use('/api/sucursales', verificarToken, rutasSucursales);
 
 // 5) Si ninguna ruta coincidio, respondemos 404 en JSON.
 app.use(noEncontrada);

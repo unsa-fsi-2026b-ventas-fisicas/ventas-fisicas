@@ -23,14 +23,16 @@ INSERT INTO sucursales (id, nombre, direccion) VALUES
 
 -- ------------------------------------------------------------
 -- USUARIOS
+--  admin: sin sucursal (trabaja en todas)
+--  cajero1: sucursal 1 | cajero2: sucursal 2
 -- ------------------------------------------------------------
-INSERT INTO usuarios (id, nombre, usuario, password_hash, rol) VALUES
+INSERT INTO usuarios (id, nombre, usuario, password_hash, rol, sucursal_id) VALUES
   (1, 'Administrador del Sistema', 'admin',
-      '$2b$10$fV3B9HWHmTrdyQSrcWXX/OgMyEPIAQQZDf/XDWG5cVRgoqc8qHR86', 'administrador'),
+      '$2b$10$fV3B9HWHmTrdyQSrcWXX/OgMyEPIAQQZDf/XDWG5cVRgoqc8qHR86', 'administrador', NULL),
   (2, 'Maria Quispe', 'cajero1',
-      '$2b$10$9vUvna10l0mQiVnlSXDl/.pm1ks/HwcBLdmODCQSe9YPqoXwnNwOa', 'cajero'),
+      '$2b$10$9vUvna10l0mQiVnlSXDl/.pm1ks/HwcBLdmODCQSe9YPqoXwnNwOa', 'cajero', 1),
   (3, 'Luis Huaman', 'cajero2',
-      '$2b$10$9vUvna10l0mQiVnlSXDl/.pm1ks/HwcBLdmODCQSe9YPqoXwnNwOa', 'cajero');
+      '$2b$10$9vUvna10l0mQiVnlSXDl/.pm1ks/HwcBLdmODCQSe9YPqoXwnNwOa', 'cajero', 2);
 
 -- ------------------------------------------------------------
 -- PRODUCTOS (solo 8, pero cada uno cubre un escenario distinto)
