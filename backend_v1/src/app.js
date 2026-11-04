@@ -20,6 +20,7 @@ const rutasInventario = require('./modules/inventario/inventario.routes');
 const rutasClientes = require('./modules/clientes/clientes.routes');
 const rutasCajas = require('./modules/cajas/cajas.routes');
 const rutasSucursales = require('./modules/sucursales/sucursales.routes');
+const rutasVentas = require('./modules/ventas/ventas.routes');
 
 const app = express();
 
@@ -69,6 +70,9 @@ app.use('/api/inventario', verificarToken, rutasInventario);
 app.use('/api/clientes', verificarToken, rutasClientes);
 app.use('/api/cajas', verificarToken, rutasCajas);
 app.use('/api/sucursales', verificarToken, rutasSucursales);
+
+// Ventas: cajero y administrador. El servicio decide que ve cada uno.
+app.use('/api/ventas', verificarToken, rutasVentas);
 
 // 5) Si ninguna ruta coincidio, respondemos 404 en JSON.
 app.use(noEncontrada);

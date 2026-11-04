@@ -185,6 +185,7 @@ CREATE TABLE ventas (
   igv               NUMERIC(10,2) NOT NULL CHECK (igv >= 0),
   total             NUMERIC(10,2) NOT NULL CHECK (total >= 0),
   estado            VARCHAR(10)   NOT NULL DEFAULT 'emitida' CHECK (estado IN ('emitida', 'anulada')),
+  vuelto            NUMERIC(10,2) NOT NULL DEFAULT 0 CHECK (vuelto >= 0),
   motivo_anulacion  VARCHAR(300),
   anulada_por       INT           REFERENCES usuarios(id),
   anulada_en        TIMESTAMPTZ,
