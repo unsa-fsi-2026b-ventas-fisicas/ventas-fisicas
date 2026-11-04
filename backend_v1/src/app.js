@@ -12,6 +12,9 @@ const express = require('express');
 const cors = require('cors');
 const { query } = require('./config/db');
 const { noEncontrada, manejadorErrores } = require('./middlewares/errores');
+const { verificarToken, soloRoles } = require('./middlewares/auth');
+const rutasAuth = require('./modules/auth/auth.routes');
+const rutasUsuarios = require('./modules/usuarios/usuarios.routes');
 
 const app = express();
 
@@ -44,9 +47,12 @@ app.get('/api/health', async (req, res) => {
 });
 
 // 4) Rutas de los modulos.
-//    Se van descomentando etapa por etapa, a medida que las creamos.
-//    Ejemplo futuro:
-//    app.use('/api/productos', rutasProductos);
+//    Ojo con el orden de los middlewares: primero se verifica el
+//    token (quien sos) y despues el rol (que podes hacer).
+app.use('/api/auth', rutasAuth);
+
+// Todo el CRUD de usuarios es exclusivo del administrador.
+app.use('/api/usuarios', verificarToken, soloRoles('administrador'), rutasUsuarios);
 
 // 5) Si ninguna ruta coincidio, respondemos 404 en JSON.
 app.use(noEncontrada);

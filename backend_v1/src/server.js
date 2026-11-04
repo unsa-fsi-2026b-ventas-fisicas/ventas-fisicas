@@ -14,6 +14,12 @@ const { pool } = require('./config/db');
 const PUERTO = Number(process.env.PORT) || 3001;
 
 async function arrancar() {
+  // Sin clave secreta no se pueden firmar tokens: mejor fallar al arrancar.
+  if (!process.env.JWT_SECRET) {
+    console.error('[api] Falta JWT_SECRET en el archivo .env');
+    process.exit(1);
+  }
+
   try {
     await pool.query('SELECT 1'); // consulta minima: solo prueba la conexion
     console.log('[db]  Conectado a PostgreSQL');
